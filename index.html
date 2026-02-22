@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Disastro— 3D Disaster Simulation and Prevention</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { background: #000; color: #eee; font-family: 'IBM Plex Mono', monospace, system-ui, sans-serif; overflow: hidden; }
+    canvas { display: block; }
+
+    /* Landing is rendered by React into #landing-root */
+
+
+    #hud {
+      position: fixed; bottom: 16px; left: 16px;
+      font-size: 12px; color: #888;
+      pointer-events: none; z-index: 5;
+    }
+
+    #crosshair {
+      position: fixed; top: 50%; left: 50%;
+      width: 16px; height: 16px;
+      transform: translate(-50%, -50%);
+      pointer-events: none; z-index: 5;
+      display: none;
+    }
+    #crosshair::before, #crosshair::after {
+      content: ''; position: absolute; background: rgba(255,255,255,0.5);
+    }
+    #crosshair::before { width: 1px; height: 100%; left: 50%; }
+    #crosshair::after { height: 1px; width: 100%; top: 50%; }
+
+    #loading {
+      position: fixed; top: 16px; left: 50%; transform: translateX(-50%);
+      background: #1a1a2e; border: 1px solid #333; border-radius: 8px;
+      padding: 8px 20px; font-size: 13px; z-index: 15;
+      display: none;
+    }
+
+    /* Agent system UI */
+    #info {
+      position: fixed; top: 12px; left: 12px;
+      font-size: 12px; color: #4fc3f7;
+      pointer-events: none; z-index: 5;
+      font-family: monospace;
+    }
+
+    #agent-hud {
+      position: fixed; top: 12px; right: 12px;
+      background: rgba(0,0,0,0.75); border: 1px solid #333;
+      border-radius: 8px; padding: 10px 14px;
+      font-size: 12px; font-family: monospace;
+      z-index: 5; min-width: 180px;
+    }
+    .agent-header { color: #4fc3f7; margin-bottom: 6px; font-weight: bold; }
+    .agent-row { color: #ccc; padding: 2px 0; }
+    .agent-row.dead { color: #666; text-decoration: line-through; }
+
+    #snapshot-gallery {
+      position: fixed; bottom: 12px; left: 12px; right: 12px;
+      display: flex; gap: 8px; overflow-x: auto;
+      z-index: 5; padding: 4px;
+      pointer-events: auto;
+    }
+    .snapshot-card {
+      flex-shrink: 0; width: 200px;
+      background: rgba(0,0,0,0.8); border: 1px solid #333;
+      border-radius: 6px; overflow: hidden;
+    }
+    .snapshot-card img { width: 200px; height: 200px; object-fit: cover; display: block; transform: scaleY(-1); }
+    .snapshot-card .caption { padding: 6px 8px; font-size: 10px; color: #aaa; font-family: monospace; }
+    .snapshot-card .caption .name { color: #4fc3f7; font-weight: bold; margin-bottom: 2px; }
+    .snapshot-card .caption .step-info { color: #888; margin-bottom: 4px; }
+
+    /* Scenario selection panel */
+    #scenario-panel {
+      position: fixed; top: 16px; left: 16px;
+      background: rgba(26,26,46,0.92); border: 1px solid #333;
+      border-radius: 10px; padding: 16px 18px;
+      z-index: 6; min-width: 220px;
+      display: none;
+      backdrop-filter: blur(8px);
+    }
+    #scenario-panel.visible { display: block; }
+    #scenario-panel h2 {
+      font-size: 14px; color: #4fc3f7; margin-bottom: 12px;
+      font-family: monospace; letter-spacing: 1px;
+      text-transform: uppercase;
+    }
+    .scenario-card {
+      display: flex; align-items: center; gap: 12px;
+      padding: 10px 12px; margin-bottom: 8px;
+      background: rgba(255,255,255,0.04); border: 1px solid #444;
+      border-radius: 8px; cursor: pointer;
+      transition: background 0.15s, border-color 0.15s;
+    }
+    .scenario-card:last-child { margin-bottom: 0; }
+    .scenario-card:hover:not(.disabled) {
+      background: rgba(67,97,238,0.15); border-color: #4361ee;
+    }
+    .scenario-card.disabled {
+      opacity: 0.35; cursor: not-allowed;
+    }
+    .scenario-card .sc-icon { font-size: 22px; flex-shrink: 0; width: 32px; text-align: center; }
+    .scenario-card .sc-text { flex: 1; }
+    .scenario-card .sc-name { font-size: 13px; font-weight: 600; color: #eee; }
+    .scenario-card .sc-desc { font-size: 11px; color: #888; margin-top: 2px; }
+
+    /* Fire control panel */
+    #fire-config-panel {
+      position: fixed; top: 56px; right: 16px;
+      background: rgba(26,26,46,0.92); border: 1px solid #444;
+      border-radius: 10px; padding: 16px 18px;
+      z-index: 7; width: 260px;
+      display: none;
+      backdrop-filter: blur(8px);
+    }
+    #fire-config-panel h3 {
+      margin: 0 0 2px; font-size: 15px; color: #ffd2b5;
+    }
+    #fire-config-panel .fp-sub {
+      font-size: 11px; color: #b99b86; margin-bottom: 12px;
+    }
+    .fire-slider-group {
+      margin-bottom: 12px;
+    }
+    .fire-slider-group label {
+      display: flex; justify-content: space-between; align-items: center;
+      font-size: 12px; color: #aaa; margin-bottom: 4px;
+    }
+    .fire-slider-group label .val {
+      color: #ff8844; font-weight: bold;
+    }
+    .fire-slider-group input[type="range"] {
+      width: 100%; cursor: pointer;
+      accent-color: #ff6600;
+    }
+    #fire-config-panel .fp-row { display: flex; gap: 8px; margin-bottom: 6px; }
+    #fire-config-panel button {
+      flex: 1; padding: 8px 0;
+      border: none; border-radius: 6px;
+      font-size: 13px; cursor: pointer;
+      transition: background 0.15s;
+    }
+    #fire-config-panel button:hover { filter: brightness(1.15); }
+    #fire-spawn-btn { background: #cc4400; color: #fff; }
+    #fire-stop-btn { background: #555; color: #ddd; display: none; }
+
+    #stop-sim-btn {
+      position: fixed; top: 12px; right: 330px;
+      padding: 6px 14px;
+      background: rgba(46,26,26,0.85); border: 1px solid #622;
+      border-radius: 6px; color: #e55;
+      font-size: 12px; font-family: monospace;
+      cursor: pointer; z-index: 6;
+      transition: background 0.15s, border-color 0.15s;
+      display: none;
+    }
+    #stop-sim-btn:hover { background: rgba(80,30,30,0.9); border-color: #e55; }
+
+    #exit-sim-btn {
+      position: fixed; bottom: 12px; right: 12px;
+      padding: 6px 14px;
+      background: rgba(90,90,90,0.9); border: 1px solid #777;
+      border-radius: 6px; color: #ff4d4d;
+      font-size: 12px; font-family: monospace;
+      cursor: pointer; z-index: 6;
+      transition: background 0.15s, border-color 0.15s;
+      display: none;
+    }
+    #exit-sim-btn:hover { background: rgba(120,120,120,0.95); border-color: #999; }
+
+    #toggle-agent-cams-btn {
+      position: fixed; bottom: 48px; right: 12px;
+      padding: 6px 14px;
+      background: rgba(60,60,60,0.9); border: 1px solid #666;
+      border-radius: 6px; color: #cfd9e6;
+      font-size: 12px; font-family: monospace;
+      cursor: pointer; z-index: 6;
+      transition: background 0.15s, border-color 0.15s;
+      display: none;
+    }
+    #toggle-agent-cams-btn:hover { background: rgba(90,90,90,0.95); border-color: #888; }
+
+    #replay-btn {
+      position: fixed; top: 12px; right: 200px;
+      padding: 6px 14px;
+      background: rgba(26,26,46,0.85); border: 1px solid #444;
+      border-radius: 6px; color: #4fc3f7;
+      font-size: 12px; font-family: monospace;
+      cursor: pointer; z-index: 6;
+      transition: background 0.15s, border-color 0.15s;
+      text-decoration: none; display: inline-block;
+    }
+    #replay-btn:hover { background: rgba(67,97,238,0.15); border-color: #4361ee; }
+
+    /* Tornado control panel */
+    #tornado-panel {
+      position: fixed; top: 16px; left: 16px;
+      background: rgba(26,26,46,0.92); border: 1px solid #444;
+      border-radius: 10px; padding: 16px 20px;
+      width: 260px; z-index: 20;
+      font-size: 13px; color: #ccc;
+      display: none;
+      backdrop-filter: blur(6px);
+    }
+    #tornado-panel h3 {
+      margin: 0 0 2px; font-size: 15px; color: #eee;
+    }
+    #tornado-panel .tp-sub {
+      font-size: 11px; color: #888; margin-bottom: 12px;
+    }
+    #tornado-panel label {
+      display: block; margin-bottom: 2px; color: #aaa; font-size: 12px;
+    }
+    #tornado-panel input[type="range"] {
+      width: 100%; cursor: pointer; accent-color: #e04040;
+      margin-bottom: 10px;
+    }
+    #tornado-panel .ef-badge {
+      display: inline-block; padding: 2px 8px; border-radius: 4px;
+      font-weight: 700; font-size: 13px; margin-right: 6px;
+    }
+    #tornado-panel .tp-row { display: flex; gap: 8px; margin-bottom: 8px; }
+    #tornado-panel button {
+      flex: 1; padding: 8px 0;
+      border: none; border-radius: 6px;
+      font-size: 13px; cursor: pointer;
+      transition: background 0.15s;
+    }
+    #tornado-panel button:hover { filter: brightness(1.15); }
+    #tornado-panel #spawn-btn {
+      background: #c0392b; color: #fff;
+    }
+    #tornado-panel #despawn-btn {
+      background: #555; color: #ddd; display: none;
+    }
+    #tornado-panel .tp-stats {
+      margin-top: 10px; padding-top: 8px;
+      border-top: 1px solid #333; font-size: 11px; color: #999;
+      display: none;
+    }
+    #tornado-panel .tp-stats span { color: #ddd; }
+
+    /* Earthquake control panel */
+    #quake-panel {
+      position: fixed; top: 16px; left: 16px;
+      background: rgba(26,26,46,0.92); border: 1px solid #444;
+      border-radius: 10px; padding: 16px 20px;
+      width: 260px; z-index: 20;
+      font-size: 13px; color: #ccc;
+      display: none;
+      backdrop-filter: blur(6px);
+    }
+    #quake-panel h3 {
+      margin: 0 0 2px; font-size: 15px; color: #eee;
+    }
+    #quake-panel .qp-sub {
+      font-size: 11px; color: #888; margin-bottom: 12px;
+    }
+    #quake-panel label {
+      display: block; margin-bottom: 2px; color: #aaa; font-size: 12px;
+    }
+    #quake-panel input[type="range"] {
+      width: 100%; cursor: pointer; accent-color: #e6b800;
+      margin-bottom: 10px;
+    }
+    #quake-panel .qp-row { display: flex; gap: 8px; margin-bottom: 8px; }
+    #quake-panel button {
+      flex: 1; padding: 8px 0;
+      border: none; border-radius: 6px;
+      font-size: 13px; cursor: pointer;
+      transition: background 0.15s;
+    }
+    #quake-panel button:hover { filter: brightness(1.15); }
+    #quake-panel #spawn-quake-btn {
+      background: #b58900; color: #fff;
+    }
+    #quake-panel #stop-quake-btn {
+      background: #555; color: #ddd; display: none;
+    }
+
+    /* Flood control panel */
+    #flood-panel {
+      position: fixed; top: 16px; left: 16px;
+      background: rgba(20,28,40,0.92); border: 1px solid #446;
+      border-radius: 10px; padding: 16px 20px;
+      width: 260px; z-index: 20;
+      font-size: 13px; color: #cfd9e6;
+      display: none;
+      backdrop-filter: blur(6px);
+    }
+    #flood-panel h3 { margin: 0 0 2px; font-size: 15px; color: #eef6ff; }
+    #flood-panel .fp-sub { font-size: 11px; color: #8ea3bd; margin-bottom: 12px; }
+    #flood-panel label { display: block; margin-bottom: 2px; color: #a9b9cc; font-size: 12px; }
+    #flood-panel input[type="range"] {
+      width: 100%; cursor: pointer; accent-color: #3aa0ff;
+      margin-bottom: 10px;
+    }
+    #flood-panel .fp-row { display: flex; gap: 8px; margin-bottom: 8px; }
+    #flood-panel button {
+      flex: 1; padding: 8px 0;
+      border: none; border-radius: 6px;
+      font-size: 13px; cursor: pointer;
+      transition: background 0.15s;
+    }
+    #flood-panel button:hover { filter: brightness(1.15); }
+    #flood-panel #spawn-flood-btn { background: #2f7fd6; color: #fff; }
+    #flood-panel #stop-flood-btn { background: #555; color: #ddd; display: none; }
+  </style>
+</head>
+<body>
+  <div id="landing-root" style="position:fixed;inset:0;z-index:20;"></div>
+  <div id="scenario-panel">
+    <h2>Scenarios</h2>
+  </div>
+  <div id="fire-config-panel">
+    <h3>Fire Simulator</h3>
+    <p class="fp-sub">Press <kbd>T</kbd> to start · <kbd>X</kbd> to stop</p>
+    <div class="fire-slider-group">
+      <label>Fire Size <span class="val" id="fire-size-val">35</span>m</label>
+      <input id="fire-size" type="range" min="10" max="80" step="5" value="35" />
+    </div>
+    <div class="fire-slider-group">
+      <label>Max Spread <span class="val" id="fire-spread-val">12</span></label>
+      <input id="fire-spread" type="range" min="1" max="30" step="1" value="12" />
+    </div>
+    <div class="fp-row">
+      <button id="fire-spawn-btn">Start Fire (T)</button>
+      <button id="fire-stop-btn">Stop (X)</button>
+    </div>
+  </div>
+  <button id="exit-sim-btn">Exit Simulation</button>
+  <button id="toggle-agent-cams-btn">Show Agent Cams</button>
+  <button id="stop-sim-btn">Stop Simulation</button>
+  <a id="replay-btn" href="/replay" target="_blank">View Replays</a>
+  <div id="info"></div>
+  <div id="agent-hud"></div>
+  <div id="snapshot-gallery"></div>
+  <div id="crosshair"></div>
+  <div id="hud"></div>
+  <div id="loading">Loading building data…</div>
+
+  <!-- Tornado Simulator Panel -->
+  <div id="tornado-panel">
+    <h3>Tornado Simulator</h3>
+    <p class="tp-sub">Press <kbd>T</kbd> to spawn · <kbd>X</kbd> to stop</p>
+
+    <label>
+      Strength: <span id="ef-badge" class="ef-badge" style="background:#ff4400;">EF3</span>
+      <span id="ef-desc" style="font-size:11px;color:#999;">Severe · 136–165 mph</span>
+    </label>
+    <input id="ef-slider" type="range" min="0" max="5" step="1" value="3" />
+
+    <label>Core Radius (from EF): <strong id="radius-val">—</strong> m</label>
+    <div class="tp-sub" style="margin-top:-6px;">Median path width: <strong id="width-val">—</strong> m</div>
+
+    <label>Move Speed: <strong id="speed-val">15</strong> m/s</label>
+    <input id="speed-slider" type="range" min="0" max="60" step="1" value="15" />
+
+    <div class="tp-row">
+      <button id="spawn-btn">Spawn Tornado (T)</button>
+      <button id="despawn-btn">Stop (X)</button>
+    </div>
+
+    <div class="tp-stats" id="tornado-stats">
+      Wind at center: <span id="ts-wind">—</span> mph<br/>
+      Buildings damaged: <span id="ts-damaged">0</span><br/>
+      Buildings destroyed: <span id="ts-destroyed">0</span>
+    </div>
+  </div>
+
+  <!-- Earthquake Simulator Panel -->
+  <div id="quake-panel">
+    <h3>Earthquake Simulator</h3>
+    <p class="qp-sub">Press <kbd>T</kbd> to start · <kbd>X</kbd> to stop</p>
+
+    <label>Magnitude: <strong id="mag-val">6.0</strong></label>
+    <input id="mag-slider" type="range" min="4.0" max="9.5" step="0.1" value="6.0" />
+
+    <label>Affected Radius (MMI ≥ IV): <strong id="eq-radius-val">—</strong></label>
+
+    <div class="qp-row">
+      <button id="spawn-quake-btn">Start Quake (T)</button>
+      <button id="stop-quake-btn">Stop (X)</button>
+    </div>
+  </div>
+
+  <!-- Flood Simulator Panel -->
+  <div id="flood-panel">
+    <h3>Flood Simulator</h3>
+    <p class="fp-sub">Press <kbd>T</kbd> to start · <kbd>X</kbd> to stop</p>
+
+    <label>Water Volume: <strong id="flood-height-val">20k</strong> m&sup3;</label>
+    <input id="flood-height" type="range" min="10.0" max="30.0" step="0.1" value="10.0" />
+
+    <label>Affected Radius: <strong id="flood-radius-val">—</strong></label>
+
+    <div class="fp-row">
+      <button id="spawn-flood-btn">Start Flood (T)</button>
+      <button id="stop-flood-btn">Stop (X)</button>
+    </div>
+  </div>
+  <script type="module" src="./src/main.ts"></script>
+</body>
+</html>

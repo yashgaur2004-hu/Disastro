@@ -1,0 +1,54 @@
+{
+  "name": "opendisaster",
+  "version": "1.0.0",
+  "description": "A comprehensive disaster simulation SDK with AI-driven agents, multi-disaster support, and real-world location integration",
+  "main": "sdk/index.ts",
+  "types": "sdk/index.ts",
+  "module": "index.ts",
+  "type": "module",
+  "exports": {
+    ".": "./sdk/index.ts",
+    "./sdk": "./sdk/index.ts",
+    "./types": "./sdk/types.ts",
+    "./example": "./sdk/example.ts"
+  },
+  "files": [
+    "sdk/**/*",
+    "src/**/*",
+    "disasters/**/*",
+    "assets/**/*",
+    "public/**/*"
+  ],
+  "scripts": {
+    "dev": "bun run --hot index.ts",
+    "start": "bun run index.ts",
+    "build:sdk": "bun build sdk/index.ts --outdir dist/sdk --target browser"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "@types/three": "^0.182.0",
+    "ts-node": "^10.9.2"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  },
+  "dependencies": {
+    "@react-three/fiber": "^9.5.0",
+    "@react-three/postprocessing": "^3.0.4",
+    "@types/react": "^19.2.13",
+    "@types/react-dom": "^19.2.3",
+    "bitecs": "^0.4.0",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "cors": "^2.8.6",
+    "express": "^5.2.1",
+    "framer-motion": "^12.33.0",
+    "lucide-react": "^0.563.0",
+    "postprocessing": "^6.38.2",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4",
+    "tailwind-merge": "^3.4.0",
+    "tailwindcss": "^4.1.18",
+    "three": "^0.182.0"
+  }
+}
